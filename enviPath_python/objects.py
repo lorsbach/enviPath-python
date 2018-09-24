@@ -33,7 +33,7 @@ class enviPathObject(object):
         Simple string representation including type, name and id.
         :return: The object as string.
         """
-        return '{}: {} ({})'.format(self.get_type(), self._get_name(), self.id)
+        return '{}: {} ({})'.format(self.get_type(), self.get_name(), self.id)
 
     def __repr__(self):
         """
