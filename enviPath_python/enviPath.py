@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-from utils import Endpoint
+from enviPath_python.utils import Endpoint
 from requests import Session
 from requests.adapters import HTTPAdapter
 from objects import User, Package, Compound, Pathway, Reaction, Scenario, Setting, Rule, Group
