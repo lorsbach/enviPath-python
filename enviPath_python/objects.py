@@ -66,6 +66,7 @@ class enviPathObject(object):
     def _get_name(self):
         if not hasattr(self, 'name'):
             self._load()
+        return self.name
 
     def _load(self):
         """
