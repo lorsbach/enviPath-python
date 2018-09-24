@@ -16,7 +16,7 @@ class enviPathObject(object):
         """
         self.requester = requester
         # Make name optional to allow object creation with id only
-        if kwargs['name']:
+        if 'name' in kwargs:
             self.name = kwargs['name']
         self.id = kwargs['id']
         self.loaded = False
