@@ -3,7 +3,7 @@
 from enviPath_python.utils import Endpoint
 from requests import Session
 from requests.adapters import HTTPAdapter
-from objects import User, Package, Compound, Pathway, Reaction, Scenario, Setting, Rule, Group
+from enviPath_python.objects import User, Package, Compound, Pathway, Reaction, Scenario, Setting, Rule, Group
 
 
 class enviPath(object):
