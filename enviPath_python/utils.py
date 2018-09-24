@@ -13,3 +13,6 @@ class Endpoint(Enum):
     SCENARIO = 'scenario'
     SETTING = 'setting'
     GROUP = 'group'
+    STRUCTURE = 'structure'
+    NODE = 'node'
+    EDGE = 'edge'

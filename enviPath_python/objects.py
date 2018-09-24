@@ -96,9 +96,39 @@ class Package(enviPathObject):
         res = self.requester._get_objects(self.id + '/', Endpoint.RULE)
         return res
 
+    def get_reactions(self):
+        """
+        Gets all reactions of the package.
+        :return: List of Reaction objects.
+        """
+        res = self.requester._get_objects(self.id + '/', Endpoint.REACTION)
+        return res
+
+    def get_pathways(self):
+        """
+        Gets all pathways of the package.
+        :return: List of Pathway objects.
+        """
+        res = self.requester._get_objects(self.id + '/', Endpoint.PATHWAY)
+        return res
+
+    def get_scenarios(self):
+        """
+        Gets all scenarios of the package.
+        :return: List of Scenario objects.
+        """
+        res = self.requester._get_objects(self.id + '/', Endpoint.SCENARIO)
+        return res
+
 
 class Compound(enviPathObject):
-    pass
+    def get_structures(self):
+        """
+        Gets all structures of this compound.
+        :return: List of Structure objects.
+        """
+        res = self.requester._get_objects(self.id + '/', Endpoint.STRUCTURE)
+        return res
 
 
 class Reaction(enviPathObject):
@@ -106,6 +136,14 @@ class Reaction(enviPathObject):
 
 
 class Pathway(enviPathObject):
+    pass
+
+
+class Node(enviPathObject):
+    pass
+
+
+class Edge(enviPathObject):
     pass
 
 
@@ -126,4 +164,8 @@ class User(enviPathObject):
 
 
 class Group(enviPathObject):
+    pass
+
+
+class Structure(enviPathObject):
     pass

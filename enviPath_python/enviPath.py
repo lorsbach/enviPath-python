@@ -3,7 +3,7 @@
 from enviPath_python.utils import Endpoint
 from requests import Session
 from requests.adapters import HTTPAdapter
-from enviPath_python.objects import User, Package, Compound, Pathway, Reaction, Scenario, Setting, Rule, Group
+from enviPath_python.objects import *
 
 
 class enviPath(object):
@@ -11,13 +11,13 @@ class enviPath(object):
     Object representing enviPath functionality.
     """
 
-    def __init__(self, base_url):
+    def __init__(self, base_url, proxies=None):
         """
         Constructor with instance specification.
         :param base_url: The url of the enviPath instance.
         """
         self.BASE_URL = base_url if base_url.endswith('/') else base_url + '/'
-        self.requester = enviPathRequester()
+        self.requester = enviPathRequester(proxies)
 
     def login(self, username, password):
         """
@@ -126,16 +126,21 @@ class enviPathRequester(object):
         Endpoint.SCENARIO: Scenario,
         Endpoint.SETTING: Setting,
         Endpoint.RULE: Rule,
+        Endpoint.NODE: Node,
+        Endpoint.EDGE: Edge,
+        Endpoint.STRUCTURE: Structure,
         Endpoint.GROUP: Group,
     }
 
-    def __init__(self):
+    def __init__(self, proxies=None):
         """
         Setup session for cookies as well as avoiding unnecessary ssl-handshakes.
         """
         self.session = Session()
         self.session.mount('http://', HTTPAdapter())
         self.session.mount('https://', HTTPAdapter())
+        if proxies:
+            self.session.proxies = proxies
 
     def _get_request(self, url, params=None, payload=None):
         """
@@ -211,8 +216,8 @@ class enviPathRequester(object):
 
 
 if __name__ == '__main__':
-    from enviPath_python.enviPath import enviPath
     from enviPath_python.objects import *
+
     INSTANCE_HOST = 'https://envipath.org/'
 
     ep = enviPath(INSTANCE_HOST)
@@ -224,4 +229,7 @@ if __name__ == '__main__':
     }
     p = Package(ep_r, **data)
 
-    print(p.get_json())
+    c = p.get_compounds()[0]
+
+    print(c.get_json())
+    print(c.get_structures())
