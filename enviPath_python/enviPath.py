@@ -211,17 +211,17 @@ class enviPathRequester(object):
 
 
 if __name__ == '__main__':
-from enviPath_python.enviPath import enviPath
-from enviPath_python.objects import *
-INSTANCE_HOST = 'https://envipath.org/'
+    from enviPath_python.enviPath import enviPath
+    from enviPath_python.objects import *
+    INSTANCE_HOST = 'https://envipath.org/'
 
-ep = enviPath(INSTANCE_HOST)
-ep_r = ep.requester
+    ep = enviPath(INSTANCE_HOST)
+    ep_r = ep.requester
 
-data = {
-    # EAWAG SOIL identifier
-    'id': 'https://envipath.org/package/5882df9c-dae1-4d80-a40e-db4724271456',
-}
-p = Package(ep_r, **data)
+    data = {
+        # EAWAG SOIL identifier
+        'id': 'https://envipath.org/package/5882df9c-dae1-4d80-a40e-db4724271456',
+    }
+    p = Package(ep_r, **data)
 
-print(p.get_json())
+    print(p.get_json())
