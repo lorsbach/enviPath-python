@@ -16,7 +16,7 @@ class enviPath(object):
         Constructor with instance specification.
         :param base_url: The url of the enviPath instance.
         """
-        self.BASE_URL = base_url
+        self.BASE_URL = base_url if base_url.endswith('/') else base_url + '/'
         self.requester = enviPathRequester()
 
     def login(self, username, password):
