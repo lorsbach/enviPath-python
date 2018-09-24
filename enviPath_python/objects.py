@@ -61,7 +61,7 @@ class enviPathObject(object):
         if not hasattr(self, field):
             raise ValueError('{} has no property {}'.format(self.get_type(), field))
 
-        return getattr(self, k)
+        return getattr(self, field)
 
     def get_name(self):
         return self._get('name')
