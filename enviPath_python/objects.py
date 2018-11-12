@@ -54,7 +54,6 @@ class enviPathObject(object):
         """
         if not self.loaded and not hasattr(self, field):
             obj_fields = self._load()
-            print(obj_fields)
             for k, v in obj_fields.items():
                 setattr(self, k, v)
 
@@ -122,6 +121,25 @@ class Package(enviPathObject):
         """
         res = self.requester._get_objects(self.id + '/', Endpoint.SCENARIO)
         return res
+
+    def predict(self, smiles, **kwargs):
+        """
+        Predicts a pathway.
+        :param smiles: The SMILES string
+        :param kwargs: possible additional parameters are:
+                        'name' - the desired name for the pathway
+                        'description' - the desired description for the pathway
+                        'rootOnly' - 'true' or 'false', if set to 'true' a pathway only containing the root compound
+                                      will be created. Default: 'false'
+        :return: a Pathway object.
+        """
+        data = {
+            'smilesinput': smiles
+        }
+        data.update(kwargs)
+        res = self.requester._post_request(self.id + '/pathway', params=None, payload=data).json()
+
+        return Pathway(self.requester, **res)
 
 
 class Compound(enviPathObject):
