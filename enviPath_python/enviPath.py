@@ -1,8 +1,22 @@
-# -*- coding: utf-8 -*-
-from typing import List
-from enviPath_python.enums import Endpoint
+# Copyright 2020 enviPath UG & Co. KG
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+# documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+# the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+# TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+# CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
 from requests import Session
 from requests.adapters import HTTPAdapter
+
 from enviPath_python.objects import *
 
 
@@ -18,6 +32,9 @@ class enviPath(object):
         """
         self.BASE_URL = base_url if base_url.endswith('/') else base_url + '/'
         self.requester = enviPathRequester(proxies)
+
+    def get_base_url(self):
+        return self.BASE_URL
 
     def login(self, username, password) -> None:
         """
@@ -47,12 +64,28 @@ class enviPath(object):
         user_data = self.requester.get_request(url, params=params).json()[Endpoint.USER.value][0]
         return User(self.requester, **user_data)
 
+    def get_package(self, package_id: str):
+        """
+        TODO
+        :param package_id:
+        :return:
+        """
+        return Package(self.requester, **self.requester.get_json(package_id))
+
     def get_packages(self) -> List['Package']:
         """
         Gets all packages the logged in user has at least read permissions on.
         :return: List of Package objects.
         """
         return self.requester.get_objects(self.BASE_URL, Endpoint.PACKAGE)
+
+    def get_compound(self, compound_id):
+        """
+        TODO
+        :param compound_id:
+        :return:
+        """
+        return Compound(self.requester, **self.requester.get_json(compound_id))
 
     def get_compounds(self) -> List['Compound']:
         """
@@ -61,12 +94,28 @@ class enviPath(object):
         """
         return self.requester.get_objects(self.BASE_URL, Endpoint.COMPOUND)
 
+    def get_reaction(self, reaction_id):
+        """
+
+        :param reaction_id:
+        :return:
+        """
+        return Reaction(self.requester, **self.requester.get_json(reaction_id))
+
     def get_reactions(self):
         """
         Gets all reactions the logged in user has at least read permissions on.
         :return: List of Reaction objects.
         """
         return self.requester.get_objects(self.BASE_URL, Endpoint.REACTION)
+
+    def get_rule(self, rule_id):
+        """
+
+        :param rule_id:
+        :return:
+        """
+        return Rule(self.requester, **self.requester.get_json(rule_id))
 
     def get_rules(self):
         """
@@ -75,12 +124,28 @@ class enviPath(object):
         """
         return self.requester.get_objects(self.BASE_URL, Endpoint.RULE)
 
+    def get_pathway(self, pathway_id):
+        """
+
+        :param pathway_id:
+        :return:
+        """
+        return Pathway(self.requester, **self.requester.get_json(pathway_id))
+
     def get_pathways(self):
         """
         Gets all pathways the logged in user has at least read permissions on.
         :return: List of Pathway objects.
         """
         return self.requester.get_objects(self.BASE_URL, Endpoint.PATHWAY)
+
+    def get_scenario(self, scenario_id):
+        """
+
+        :param scenario_id:
+        :return:
+        """
+        return Scenario(self.requester, **self.requester.get_json(scenario_id))
 
     def get_scenarios(self):
         """
@@ -110,9 +175,8 @@ class enviPath(object):
         """
         return self.requester.get_objects(self.BASE_URL, Endpoint.GROUP)
 
-    def create_package(self, name, description) -> Package:
-        # TODO groups etc
-        pass
+    def create_package(self, group: 'Group', name: str = None, description: str = None) -> Package:
+        return Package.create(self, group, name=name, description=description)
 
 
 class enviPathRequester(object):
@@ -130,6 +194,9 @@ class enviPathRequester(object):
         Endpoint.SCENARIO: Scenario,
         Endpoint.SETTING: Setting,
         Endpoint.RULE: Rule,
+        Endpoint.SIMPLERULE: SimpleRule,
+        Endpoint.SEQUENTIALCOMPOSITERULE: SequentialCompositeRule,
+        Endpoint.PARALLELCOMPOSITERULE: ParallelCompositeRule,
         Endpoint.NODE: Node,
         Endpoint.EDGE: Edge,
         Endpoint.COMPOUNDSTRUCTURE: CompoundStructure,
@@ -190,8 +257,13 @@ class enviPathRequester(object):
         response.raise_for_status()
         return response
 
-    def get_json(self, id):
-        return self.get_request(id)
+    def get_json(self, envipath_id: str):
+        """
+        TODO
+        :param envipath_id:
+        :return:
+        """
+        return self.get_request(envipath_id).json()
 
     def login(self, url, username, password):
         """
@@ -227,12 +299,25 @@ class enviPathRequester(object):
         """
         url = base_url + endpoint.value
         objs = self.get_request(url).json()
-        if endpoint.value in objs:
+
+        if endpoint == Endpoint.RULE:
+            res = []
+            for obj in objs[endpoint.value]:
+                if obj['identifier'] == Endpoint.SIMPLERULE.value:
+                    res.append(SimpleRule(self, **obj))
+                elif obj['identifier'] == Endpoint.SEQUENTIALCOMPOSITERULE.value:
+                    res.append(SequentialCompositeRule(self, **obj))
+                elif obj['identifier'] == Endpoint.PARALLELCOMPOSITERULE.value:
+                    res.append(ParallelCompositeRule(self, **obj))
+                else:
+                    # TODO replace with logger....
+                    print("Unknown Rule type...")
+                    print(obj)
+            return res
+        elif endpoint.value in objs:
             return [self.ENDPOINT_OBJECT_MAPPING[endpoint](self, **obj) for obj in objs[endpoint.value]]
         else:
             # TODO replace with logger....
             print('Endpoint value not present in result...')
             print(objs)
             return []
-
-

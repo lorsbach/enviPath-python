@@ -1,13 +1,29 @@
-# -*- coding: utf-8 -*-
+# Copyright 2020 enviPath UG & Co. KG
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+# documentation files (the "Software"), to deal in the Software without restriction, including without limitation
+# the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software,
+# and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all copies or substantial portions of
+# the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+# TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+# CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+# DEALINGS IN THE SOFTWARE.
+
 import json
-from abc import ABCMeta
+from abc import ABC, abstractmethod
+from collections import namedtuple
 from io import BytesIO
-from typing import List
+from typing import List, Optional
+from enviPath_python.enums import Endpoint, ClassifierType, FingerprinterType, AssociationType, \
+    ApplicabilityDomainType, EvaluationType
 
-from enviPath_python.enums import Endpoint, Model
 
-
-class enviPathObject(metaclass=ABCMeta):
+class enviPathObject(ABC):
     """
     Base class for an enviPath object.
     """
@@ -98,10 +114,9 @@ class enviPathObject(metaclass=ABCMeta):
         Returns the objects plain JSON fetched from the instance.
         :return: A JSON object returned by the API.
         """
-        return self.requester.get_json(self.id).json()
+        return self.requester.get_json(self.id)
 
     def _create_from_nested_json(self, member_name: str, nested_object_type):
-        # TODO annotation for nested_type
         res = []
         plain_objs = self._get(member_name)
         for plain_obj in plain_objs:
@@ -116,12 +131,19 @@ class enviPathObject(metaclass=ABCMeta):
         if not hasattr(self, 'id') or self.id is None:
             raise ValueError("Unable to delete object due to missing id!")
         self.requester.delete_request(self.id)
+        self.id = None
 
 
-class ReviewableEnviPathObject(enviPathObject, metaclass=ABCMeta):
+class ReviewableEnviPathObject(enviPathObject, ABC):
+
+    def get_aliases(self) -> List[str]:
+        return self._get('aliases')
 
     def get_review_status(self) -> str:
         return self._get('reviewStatus')
+
+    def is_reviewed(self) -> bool:
+        return 'reviewd' == self.get_review_status()
 
     def get_scenarios(self) -> List['Scenario']:
         res = []
@@ -133,8 +155,8 @@ class ReviewableEnviPathObject(enviPathObject, metaclass=ABCMeta):
 
 class Package(enviPathObject):
 
-    def add_compound(self, smiles: str) -> 'Compound':
-        pass
+    def add_compound(self, smiles: str, name: str = None, description: str = None, inchi: str = None) -> 'Compound':
+        return Compound.create(self, smiles, name=name, description=description, inchi=inchi)
 
     def get_compounds(self) -> List['Compound']:
         """
@@ -144,8 +166,26 @@ class Package(enviPathObject):
         res = self.requester.get_objects(self.id + '/', Endpoint.COMPOUND)
         return res
 
-    def add_rule(self, smirks: str) -> 'Rule':
-        pass
+    def add_simple_rule(self, smirks: str, name: str = None, description: str = None,
+                        reactant_filter_smarts: str = None, product_filter_smarts: str = None,
+                        immediate: str = None) -> 'SimpleRule':
+        return SimpleRule.create(self, smirks, name=name, description=description,
+                                 reactant_filter_smarts=reactant_filter_smarts,
+                                 product_filter_smarts=product_filter_smarts, immediate=immediate)
+
+    def add_sequential_composite_rule(self, simple_rules: List['SimpleRule'], name: str = None, description: str = None,
+                                      reactant_filter_smarts: str = None, product_filter_smarts: str = None,
+                                      immediate: str = None) -> 'SequentialCompositeRule':
+        return SequentialCompositeRule.create(self, simple_rules, name=name, description=description,
+                                              reactant_filter_smarts=reactant_filter_smarts,
+                                              product_filter_smarts=product_filter_smarts, immediate=immediate)
+
+    def add_parallel_composite_rule(self, simple_rules: List['SimpleRule'], name: str = None, description: str = None,
+                                    reactant_filter_smarts: str = None, product_filter_smarts: str = None,
+                                    immediate: str = None) -> 'ParallelCompositeRule':
+        return ParallelCompositeRule.create(self, simple_rules, name=name, description=description,
+                                            reactant_filter_smarts=reactant_filter_smarts,
+                                            product_filter_smarts=product_filter_smarts, immediate=immediate)
 
     def get_rules(self) -> List['Rule']:
         """
@@ -168,28 +208,12 @@ class Package(enviPathObject):
         return res
 
     def add_pathway(self):
-        # TODO
+        # TODO delegate
         pass
 
     def predict(self, smiles, **kwargs):
-        """
-        Predicts a pathway.
-        :param smiles: The SMILES string
-        :param kwargs: possible additional parameters are:
-                        'name' - the desired name for the pathway
-                        'description' - the desired description for the pathway
-                        'rootOnly' - 'true' or 'false', if set to 'true' a pathway only containing the root compound
-                                      will be created. Default: 'false'
-        :return: a Pathway object.
-        """
-
-        data = {
-            'smilesinput': smiles
-        }
-        data.update(kwargs)
-        res = self.requester.post_request(self.id + '/' + Endpoint.PATHWAY, params=None, payload=data).json()
-
-        return Pathway(self.requester, **res)
+        # TODO delegate to pathway.predict/create
+        pass
 
     def get_pathways(self) -> List['Pathway']:
         """
@@ -199,9 +223,22 @@ class Package(enviPathObject):
         res = self.requester.get_objects(self.id + '/', Endpoint.PATHWAY)
         return res
 
-    def add_relative_reasoning(self, name: str, packages: List['Package'], model: Model):
-        # TODO
-        pass
+    def add_relative_reasoning(self, packages: List['Package'], classifer_type: ClassifierType,
+                               eval_type: EvaluationType, association_type: AssociationType,
+                               evaluation_packages: List['Package'] = None,
+                               fingerprinter_type: FingerprinterType = FingerprinterType.ENVIPATH_FINGERPRINTER,
+                               quickbuild: bool = True, use_p_cut: bool = False, cut_off: float = 0.5,
+                               evaluate_later: bool = True, name: str = None, build_applicability_domain: bool = False,
+                               ad_type: ApplicabilityDomainType = ApplicabilityDomainType.COMPOUND_AND_RULE,
+                               ad_k: int = 5, ad_decidability_threshold: float = 0.5,
+                               ad_reliability_threshold: float = 0.5) -> 'RelativeReasoning':
+        return RelativeReasoning.create(self, packages, classifer_type, eval_type, association_type,
+                                        evaluation_packages=evaluation_packages, fingerprinter_type=fingerprinter_type,
+                                        quickbuild=quickbuild, use_p_cut=use_p_cut, cut_off=cut_off,
+                                        evaluate_later=evaluate_later, name=name,
+                                        build_applicability_domain=build_applicability_domain, ad_type=ad_type,
+                                        ad_k=ad_k, ad_decidability_threshold=ad_decidability_threshold,
+                                        ad_reliability_threshold=ad_reliability_threshold)
 
     def get_relative_reasonings(self) -> List['RelativeReasoning']:
         """
@@ -220,6 +257,10 @@ class Package(enviPathObject):
         return res
 
     def export_as_json(self) -> dict:
+        """
+        Exports the entire package as json.
+        :return: A dictionary containing all data stored in this package.
+        """
         params = {
             'exportAsJson': 'true',
         }
@@ -228,15 +269,34 @@ class Package(enviPathObject):
         buffer.seek(0)
         return json.loads(buffer.read().decode())
 
+    @staticmethod
+    def create(ep, group: 'Group', name: str = None, description: str = None) -> 'Package':
+        # TODO add type hint for ep and get rid of cyclic import
+        package_payload = dict()
+        package_payload['groupURI'] = group.get_id()
+        if name:
+            package_payload['packageName'] = name
+        if description:
+            package_payload['packageDescription'] = description
 
-# TODO aliases mixin
+        url = '{}{}'.format(ep.get_base_url(), Endpoint.PACKAGE.value)
+        res = ep.requester.post_request(url, payload=package_payload, allow_redirects=False)
+        res.raise_for_status()
+        return Package(ep.requester, id=res.headers['Location'])
 
 
 class Scenario(enviPathObject):
-    pass
+
+    @staticmethod
+    def create(**kwargs):
+        pass
 
 
 class Compound(ReviewableEnviPathObject):
+
+    def add_structure(self, smiles, name=None, description=None, inchi=None, mol_file=None) -> 'CompoundStructure':
+        return CompoundStructure.create(self, smiles, name=name, description=description, inchi=inchi,
+                                        mol_file=mol_file)
 
     def get_structures(self) -> List['CompoundStructure']:
         """
@@ -248,6 +308,34 @@ class Compound(ReviewableEnviPathObject):
         for plain_structure in plain_structures:
             res.append(CompoundStructure(self.requester, **plain_structure))
         return res
+
+    @staticmethod
+    def create(parent: Package, smiles: str, name=None, description=None, inchi=None) -> 'Compound':
+        if not isinstance(parent, Package):
+            raise ValueError("The parent of a compound has to be a package!")
+
+        compound_payload = dict()
+        compound_payload['compoundSmiles'] = smiles
+        if name:
+            compound_payload['compoundName'] = name
+        if description:
+            compound_payload['compoundDescription'] = description
+        if inchi:
+            compound_payload['inchi'] = inchi
+
+        url = '{}/{}'.format(parent.get_id(), Endpoint.COMPOUND.value)
+        res = parent.requester.post_request(url, payload=compound_payload, allow_redirects=False)
+        res.raise_for_status()
+        return Compound(parent.requester, id=res.headers['Location'])
+
+    def get_default_structure(self):
+        for structure in self.get_structures():
+            if structure.is_default_structure():
+                return structure
+        raise ValueError("The compound does not have a default structure!")
+
+    def get_smiles(self) -> str:
+        return self.get_default_structure().get_smiles()
 
 
 class CompoundStructure(ReviewableEnviPathObject):
@@ -273,16 +361,44 @@ class CompoundStructure(ReviewableEnviPathObject):
     def get_inchi(self) -> str:
         return self._get('InChI')
 
-    def get_halflifes(self) -> List[object]:
-        return self._get('halflifes')
+    def get_halflifes(self) -> List['HalfLife']:
+        res = []
+        for hl in self._get('halflifes'):
+            res.append(HalfLife(scenarioId=hl['scenarioId'], scenarioName=hl['scenarioName'], hl=hl['hl'],
+                                hl_comment=hl['hlComment'], hl_fit=hl['hlFit'], hl_model=hl['hlModel'],
+                                source=hl['source']))
+        return res
+
+    @staticmethod
+    def create(parent: Compound, smiles, name=None, description=None, inchi=None, mol_file=None) -> 'CompoundStructure':
+        if not isinstance(parent, Compound):
+            raise ValueError("The parent of a structure has to be a compound!")
+
+        structure_payload = dict()
+        structure_payload['smiles'] = smiles
+        if name:
+            structure_payload['name'] = name
+        if description:
+            structure_payload['description'] = description
+        if inchi:
+            structure_payload['inchi'] = inchi
+        if mol_file:
+            structure_payload['molfile'] = mol_file
+
+        url = '{}/{}'.format(parent.get_id(), Endpoint.COMPOUNDSTRUCTURE)
+        res = parent.requester.post_request(url, payload=structure_payload, allow_redirects=False)
+        res.raise_for_status()
+        return CompoundStructure(parent.requester, id=res.headers['Location'])
 
 
 class Reaction(enviPathObject):
-
+    # TODO Missing
+    #  'ecNumbers': [],
+    #  'medlineRefs': [],
     def is_multistep(self) -> bool:
-        return self._get('multistep')
+        return "true" == self._get('multistep')
 
-    # TODO is this from Rule?
+    # TODO is derived from Rule?
     def get_ec_numbers(self) -> List[object]:
         return self._get('ecNumbers')
 
@@ -301,11 +417,52 @@ class Reaction(enviPathObject):
     def get_products(self):
         return self._create_from_nested_json('products', CompoundStructure)
 
-    def get_rule(self) -> 'Rule':
-        pass
+    def get_rule(self) -> Optional['Rule']:
+        try:
+            rules = self._get('rules')
+            if len(rules) == 0:
+                return None
+            if len(rules) > 1:
+                raise Exception("More than one rule attached to reaction!")
+            rule_type = Rule.get_rule_type(rules[0])
+            return rule_type(self.requester, **rules[0])
+        except ValueError:
+            return None
+
+    @staticmethod
+    def create(package: Package, smirks: str = None, educt: CompoundStructure = None, product: CompoundStructure = None,
+               name: str = None, description: str = None, rule: 'Rule' = None):
+
+        if smirks is None and (educt is None or product is None):
+            raise ValueError("Either SMIRKS or educt/product must be provided")
+
+        if smirks is not None and (educt is not None and product is not None):
+            raise ValueError("SMIRKS and educt/product provided!")
+
+        payload = {}
+
+        if smirks:
+            payload['smirks'] = smirks
+        else:
+            payload['educt'] = educt.get_id()
+            payload['product'] = product.get_id()
+
+        if rule:
+            payload['rule'] = rule.get_id()
+
+        if name:
+            payload['reactionName'] = name
+
+        if description:
+            payload['reactionDescription'] = description
+
+        url = '{}/{}'.format(package.get_id(), Endpoint.REACTION.value)
+        res = package.requester.post_request(url, payload=payload, allow_redirects=False)
+        res.raise_for_status()
+        return Reaction(package.requester, id=res.headers['Location'])
 
 
-class Rule(ReviewableEnviPathObject):
+class Rule(ReviewableEnviPathObject, ABC):
 
     def get_ec_numbers(self) -> List[object]:
         return self._get('ecNumbers')
@@ -326,7 +483,7 @@ class Rule(ReviewableEnviPathObject):
         return self._get('transformations')
 
     def get_reactions(self) -> List['Reaction']:
-        return self._create_from_nested_json('pathways', Reaction)
+        return self._create_from_nested_json('reactions', Reaction)
 
     def get_pathways(self) -> List['Pathway']:
         return self._create_from_nested_json('pathways', Pathway)
@@ -343,13 +500,236 @@ class Rule(ReviewableEnviPathObject):
     def get_product_smarts(self) -> str:
         return self._get('productsSmarts')
 
-    def apply(self, compound):
-        # TODO
+    def apply_to_compound(self, compound: Compound) -> List[str]:
+        return self.apply_to_smiles(compound.get_default_structure().get_smiles())
+
+    def apply_to_smiles(self, smiles) -> List[str]:
+        payload = {
+            'hiddenMethod': 'APPLYRULES',
+            'compound': smiles
+        }
+        res = self.requester.post_request(self.get_id(), payload=payload)
+        res.raise_for_status()
+        result = []
+        splitted = res.text.split()
+        for split in splitted:
+            if split:
+                result.append(split)
+        return result
+
+    @staticmethod
+    def get_rule_type(obj: dict):
+        if obj['identifier'] == Endpoint.SIMPLERULE.value:
+            return SimpleRule
+        elif obj['identifier'] == Endpoint.SEQUENTIALCOMPOSITERULE.value:
+            return SequentialCompositeRule
+        elif obj['identifier'] == Endpoint.PARALLELCOMPOSITERULE.value:
+            return ParallelCompositeRule
+        else:
+            raise ValueError("Unknown rule type {}".format(obj['identifier']))
+
+    @staticmethod
+    @abstractmethod
+    def create(package: Package, smirks: str, name: str = None, description: str = None,
+               reactant_filter_smarts: str = None, product_filter_smarts: str = None):
         pass
 
 
+class SimpleRule(Rule):
+
+    @staticmethod
+    def create(package: Package, smirks: str, name: str = None, description: str = None,
+               reactant_filter_smarts: str = None, product_filter_smarts: str = None,
+               immediate: str = None) -> 'SimpleRule':
+        rule_payload = {
+            'smirks': smirks,
+        }
+
+        if name:
+            rule_payload['name'] = name
+
+        if description:
+            rule_payload['description'] = description
+
+        if reactant_filter_smarts:
+            rule_payload['reactantFilterSmarts'] = reactant_filter_smarts
+
+        if product_filter_smarts:
+            rule_payload['productFilterSmarts'] = product_filter_smarts
+
+        if immediate:
+            rule_payload['immediaterule'] = immediate
+
+        url = '{}/{}'.format(package.get_id(), Endpoint.SIMPLERULE.value)
+        res = package.requester.post_request(url, payload=rule_payload, allow_redirects=False)
+        res.raise_for_status()
+        return SimpleRule(package.requester, id=res.headers['Location'])
+
+
+class SequentialCompositeRule(Rule):
+    @staticmethod
+    def create(package: Package, simple_rules: List[SimpleRule], name: str = None, description: str = None,
+               reactant_filter_smarts: str = None, product_filter_smarts: str = None,
+               immediate: str = None) -> 'SequentialCompositeRule':
+
+        rule_payload = {
+            'simpleRules[]': [r.get_id() for r in simple_rules],
+        }
+
+        if name:
+            rule_payload['name'] = name
+
+        if description:
+            rule_payload['description'] = description
+
+        if reactant_filter_smarts:
+            rule_payload['reactantFilterSmarts'] = reactant_filter_smarts
+
+        if product_filter_smarts:
+            rule_payload['productFilterSmarts'] = product_filter_smarts
+
+        if immediate:
+            rule_payload['immediaterule'] = immediate
+
+        url = '{}/{}'.format(package.get_id(), Endpoint.SEQUENTIALCOMPOSITERULE.value)
+        res = package.requester.post_request(url, payload=rule_payload, allow_redirects=False)
+        res.raise_for_status()
+        return SequentialCompositeRule(package.requester, id=res.headers['Location'])
+
+    def get_simple_rules(self):
+        return self._create_from_nested_json('simpleRules', SimpleRule)
+
+
+class ParallelCompositeRule(Rule):
+    @staticmethod
+    def create(package: Package, simple_rules: List[SimpleRule], name: str = None, description: str = None,
+               reactant_filter_smarts: str = None, product_filter_smarts: str = None,
+               immediate: str = None) -> 'ParallelCompositeRule':
+
+        rule_payload = {
+            'simpleRules[]': [r.get_id() for r in simple_rules],
+        }
+
+        if name:
+            rule_payload['name'] = name
+
+        if description:
+            rule_payload['description'] = description
+
+        if reactant_filter_smarts:
+            rule_payload['reactantFilterSmarts'] = reactant_filter_smarts
+
+        if product_filter_smarts:
+            rule_payload['productFilterSmarts'] = product_filter_smarts
+
+        if immediate:
+            rule_payload['immediaterule'] = immediate
+
+        url = '{}/{}'.format(package.get_id(), Endpoint.PARALLELCOMPOSITERULE.value)
+        res = package.requester.post_request(url, payload=rule_payload, allow_redirects=False)
+        res.raise_for_status()
+        return ParallelCompositeRule(package.requester, id=res.headers['Location'])
+
+    def get_simple_rules(self):
+        return self._create_from_nested_json('simpleRules', SimpleRule)
+
+
 class RelativeReasoning(ReviewableEnviPathObject):
-    pass
+
+    @staticmethod
+    def create(package: Package, packages: List[Package], classifer_type: ClassifierType,
+               eval_type: EvaluationType, association_type: AssociationType,
+               evaluation_packages: List[Package] = None,
+               fingerprinter_type: FingerprinterType = FingerprinterType.ENVIPATH_FINGERPRINTER,
+               quickbuild: bool = True, use_p_cut: bool = False, cut_off: float = 0.5,
+               evaluate_later: bool = True, name: str = None, build_applicability_domain: bool = False,
+               ad_type: ApplicabilityDomainType = ApplicabilityDomainType.COMPOUND_AND_RULE, ad_k: int = 5,
+               ad_decidability_threshold: float = 0.5, ad_reliability_threshold: float = 0.5) -> 'RelativeReasoning':
+
+        payload = {
+            'fpType': fingerprinter_type.value,
+            'clfType': classifer_type.value,
+            'assocType': association_type.value,
+            'quickBuild': 'on' if quickbuild else 'off',
+            'evalLater': 'on' if evaluate_later else 'off',
+            'evalType': eval_type.value,
+            'packages': [p.get_id() for p in packages],
+            'cut-off': cut_off,
+        }
+
+        if use_p_cut:
+            payload['p-cut'] = 'on'
+
+        if evaluation_packages:
+            payload['evalPackages'] = [p.get_id() for p in evaluation_packages]
+
+        if name:
+            payload['modelName'] = name
+
+        if build_applicability_domain:
+            # TODO add check on variables?
+            payload['buildAD'] = 'on'
+            payload['adType'] = ad_type.value
+            payload['adK'] = ad_k
+            payload['decidabilityThreshold'] = ad_decidability_threshold
+            payload['reliabilityThreshold'] = ad_reliability_threshold
+
+        url = '{}/{}'.format(package.get_id(), Endpoint.RELATIVEREASONING.value)
+        res = package.requester.post_request(url, payload=payload, allow_redirects=False)
+        res.raise_for_status()
+        return RelativeReasoning(package.requester, id=res.headers['Location'])
+
+    def get_applicability_domain(self) -> Optional['ApplicabilityDomain']:
+
+        try:
+            ad_data = self._get('appdomain')
+            return ApplicabilityDomain(self.requester, id=ad_data['id'])
+        except ValueError:
+            # This object has no ApplicabilityDomain attached...
+            return None
+
+    def get_model_status(self):
+        params = {
+            'status': "true",
+        }
+        # {
+        #     'progress': 0.6,
+        #     'status': 'BUILT_BUT_NOT_EVALUATED',
+        #     'statusMessage': 'Model has finished building and can be used for predictions\n
+        #     Model has not been evaluated yet'
+        # }
+        return self.requester.get_request(self.id, params=params).json()
+
+
+class ApplicabilityDomain(ReviewableEnviPathObject):
+
+    @staticmethod
+    def create(relative_reasoning: RelativeReasoning,
+               ad_type: ApplicabilityDomainType = ApplicabilityDomainType.COMPOUND_AND_RULE,
+               ad_k: int = 5, ad_decidability_threshold: float = 0.5, ad_reliability_threshold: float = 0.5):
+        payload = {
+            'adType': ad_type.value,
+            'adK': ad_k,
+            'decidabilityThreshold': ad_decidability_threshold,
+            'reliabilityThreshold': ad_reliability_threshold,
+        }
+
+        url = '{}/{}'.format(relative_reasoning.get_id(), Endpoint.APPLICABILITYDOMAIN.value)
+        res = relative_reasoning.requester.post_request(url, payload=payload, allow_redirects=False)
+        res.raise_for_status()
+        return ApplicabilityDomain(relative_reasoning.requester, id=res.headers['Location'])
+
+    def get_ad_stats_for_compounds_structure(self, compounds_structure: CompoundStructure):
+        return self.get_ad_stats_for_smiles(compounds_structure.get_smiles())
+
+    def get_ad_stats_for_smiles(self, smiles: str) -> 'ADResult':
+        payload = {
+            'smiles': smiles
+        }
+        res = self.requester.post_request(self.id, payload=payload).json()
+        return ADResult(in_ad=res['inAD'], reliability=float(res['reliability']),
+                        decidability=float(res['decidability']),
+                        passes_ad=res['passesAD'])
 
 
 class Node(enviPathObject):
@@ -359,6 +739,9 @@ class Node(enviPathObject):
 
     def get_depth(self) -> int:
         return self._get('depth')
+
+    def create(self, **kwargs):
+        pass
 
 
 class Edge(enviPathObject):
@@ -372,13 +755,56 @@ class Edge(enviPathObject):
 
     def get_reaction(self) -> Reaction:
         return Reaction(self.requester, id=self._get('reactionURI'))
-        pass
 
     def get_reaction_name(self) -> str:
         return self._get('reactionName')
 
     def get_ec_numbers(self) -> List[object]:
         return self._get('ecNumbers')
+
+    def create(self, **kwargs):
+        pass
+
+
+class Setting(enviPathObject):
+
+    @staticmethod
+    def create(ep, packages: List[Package], name: str = None, depth_limit: int = None, node_limit: int = None,
+               relative_reasoning: RelativeReasoning = None, cut_off: float = 0.5,
+               evaluation_type: EvaluationType = None, min_carbon: int = None,
+               terminal_compounds: List[Compound] = None):
+
+        payload = {
+            'packages[]': [p.get_id() for p in packages]
+        }
+
+        if name:
+            payload['settingName'] = name
+
+        if depth_limit:
+            payload['limdepth'] = "true"
+            payload['depthNumber'] = depth_limit
+
+        if node_limit:
+            payload['limnode'] = "true"
+            payload['nodeNumber'] = node_limit
+
+        if min_carbon:
+            payload['mincarbons'] = "true"
+            payload['carbonNumber'] = min_carbon
+
+        if relative_reasoning:
+            payload['modelUri'] = relative_reasoning.get_id()
+            payload['cutoff'] = cut_off
+            payload['evalType'] = evaluation_type.value
+
+        if terminal_compounds:
+            payload['terminalcompounds[]'] = [c.get_id() for c in terminal_compounds]
+
+        url = '{}{}'.format(ep.get_base_url(), Endpoint.SETTING.value)
+        res = ep.requester.post_request(url, payload=payload, allow_redirects=False)
+        res.raise_for_status()
+        return Setting(ep.requester, id=res.headers['Location'])
 
 
 class Pathway(enviPathObject):
@@ -399,16 +825,96 @@ class Pathway(enviPathObject):
         return self._get('lastModified')
 
     def is_completed(self) -> bool:
-        return self._get('completed')
+        return "true" == self._get('completed')
 
+    @staticmethod
+    def create(package: Package, smiles: str, name: str = None, description: str = None,
+               root_node_only: bool = False, setting: Setting = None):
+        payload = {
+            'smilesinput': smiles
+        }
 
-class Setting(enviPathObject):
-    pass
+        # TODO the API allows creation of Setting on the fly. Should we support that here
+
+        if name:
+            payload['name'] = name
+
+        if description:
+            payload['description'] = description
+
+        if root_node_only:
+            payload['rootOnly'] = "true"
+
+        if setting:
+            payload['selectedSetting'] = setting.get_id()
+
+        res = package.requester.post_request(package.id + '/' + Endpoint.PATHWAY.value, params=None,
+                                             payload=payload, allow_redirects=False)
+        res.raise_for_status()
+        return Pathway(package.requester, id=res.headers['Location'])
 
 
 class User(enviPathObject):
-    pass
+
+    def get_email(self) -> str:
+        return self._get('email')
+
+    def get_forename(self) -> str:
+        return self._get('forename')
+
+    def get_surname(self) -> str:
+        return self._get('surname')
+
+    def get_default_group(self) -> 'Group':
+        pass
+
+    def get_groups(self) -> List['Group']:
+        return self._create_from_nested_json('groups', Group)
+
+    def get_default_setting(self) -> 'Setting':
+        pass
+
+    def get_settings(self) -> List['Setting']:
+        return self._create_from_nested_json('settings', Setting)
+
+    @staticmethod
+    def create(ep, email: str, username: str, password: str):
+        payload = {
+            'username': username,
+            'email': email,
+            'password': password
+        }
+        pass
+
+    @staticmethod
+    def register(ep, email: str, username: str, password: str):
+        """
+        Alias for 'create()'.
+        :return:
+        """
+        return User.create(ep, email, username, password)
+
+    @staticmethod
+    def activate(ep, username, token) -> bool:
+        params = {
+            'username': username,
+            'token': token
+        }
+        activation_url = '{}activation'.format(ep.BASE_URL)
+        res = ep.requester.get_request(activation_url, params=params, allow_redirects=False)
+        res.raise_for_status()
+        return 'activationSuccessful' in res.headers['Location']
 
 
 class Group(enviPathObject):
-    pass
+
+    def create(self, **kwargs):
+        pass
+
+
+##################
+# Helper Classes #
+##################
+
+ADResult = namedtuple('ADResult', 'in_ad reliability decidability passes_ad')
+HalfLife = namedtuple('HalfLife', 'scenarioName, scenarioId, hl, hl_comment, hl_fit, hl_model, source')
