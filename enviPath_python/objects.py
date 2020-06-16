@@ -264,7 +264,7 @@ class Package(enviPathObject):
                                         quickbuild=quickbuild, use_p_cut=use_p_cut, cut_off=cut_off,
                                         evaluate_later=evaluate_later, name=name,
                                         build_applicability_domain=build_applicability_domain,
-                                        ad_k=ad_k, ad_decidability_threshold=ad_local_compatibility_threshold,
+                                        ad_k=ad_k, ad_local_compatibilty_threshold=ad_local_compatibility_threshold,
                                         ad_reliability_threshold=ad_reliability_threshold)
 
     def get_relative_reasonings(self) -> List['RelativeReasoning']:
@@ -440,8 +440,6 @@ class CompoundStructure(ReviewableEnviPathObject):
 
 class Reaction(enviPathObject):
 
-    # TODO
-    #  'medlineRefs': [],
     def is_multistep(self) -> bool:
         return "true" == self._get('multistep')
 
@@ -718,7 +716,6 @@ class RelativeReasoning(ReviewableEnviPathObject):
             payload['modelName'] = name
 
         if build_applicability_domain:
-            # TODO add check on variables?
             payload['buildAD'] = 'on'
             payload['adK'] = ad_k
             payload['localCompatibilityThreshold'] = ad_local_compatibilty_threshold
@@ -739,8 +736,10 @@ class RelativeReasoning(ReviewableEnviPathObject):
             return None
 
     def download_arff(self) -> str:
-        # TODO
-        pass
+        params = {
+            'downloadARFF': 'ILikeCats'
+        }
+        return self.requester.get_request(self.id, params=params).text
 
     def get_model_status(self) -> 'ModelStatus':
         params = {
@@ -753,7 +752,7 @@ class RelativeReasoning(ReviewableEnviPathObject):
 
     def classify_smiles(self, smiles: str):
         # TODO
-        pass
+        raise NotImplementedError("Not (yet) implemented!")
 
 
 class ApplicabilityDomain(ReviewableEnviPathObject):
@@ -1072,7 +1071,7 @@ class User(enviPathObject):
             'email': email,
             'password': password
         }
-        raise NotImplementedError("Not implemented!")
+        raise NotImplementedError("Not (yet) implemented!")
 
     @staticmethod
     def register(ep, email: str, username: str, password: str):
@@ -1097,7 +1096,7 @@ class User(enviPathObject):
 class Group(enviPathObject):
 
     def create(self, **kwargs):
-        raise NotImplementedError("Not implemented!")
+        raise NotImplementedError("Not (yet) implemented!")
 
 
 ##################
