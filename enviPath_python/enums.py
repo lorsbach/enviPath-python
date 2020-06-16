@@ -52,12 +52,12 @@ class AssociationType(Enum):
     CALCULATED = 'CALCULATED'
 
 
-class ApplicabilityDomainType(Enum):
-    COMPOUND = 'COMPOUND'
-    RULE = 'RULE'
-    COMPOUND_AND_RULE = 'COMPOUND_AND_RULE'
-
-
 class EvaluationType(Enum):
     SINGLE_GEN = 'single'
     MULTI_GEN = 'multigen'
+
+
+class Permission(Enum):
+    READ = 'read'
+    WRITE = 'write'
+    NONE = 'none'
