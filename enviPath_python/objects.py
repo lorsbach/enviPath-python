@@ -525,9 +525,6 @@ class Rule(ReviewableEnviPathObject, ABC):
     def is_composite_rule(self) -> bool:
         return self._get('isCompositeRule')
 
-    def get_smirks(self) -> str:
-        return self._get('smirks')
-
     def get_transformations(self) -> str:
         return self._get('transformations')
 
@@ -613,6 +610,9 @@ class SimpleRule(Rule):
         res = package.requester.post_request(url, payload=rule_payload, allow_redirects=False)
         res.raise_for_status()
         return SimpleRule(package.requester, id=res.headers['Location'])
+
+    def get_smirks(self) -> str:
+        return self._get('smirks')
 
 
 class SequentialCompositeRule(Rule):
