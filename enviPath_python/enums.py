@@ -34,7 +34,6 @@ class Endpoint(Enum):
     NODE = 'node'
     EDGE = 'edge'
     RELATIVEREASONING = 'relative-reasoning'
-    APPLICABILITYDOMAIN = 'applicabilitydomain'
 
 
 class ClassifierType(Enum):

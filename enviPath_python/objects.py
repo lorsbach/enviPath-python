@@ -256,16 +256,11 @@ class Package(enviPathObject):
                                evaluation_packages: List['Package'] = None,
                                fingerprinter_type: FingerprinterType = FingerprinterType.ENVIPATH_FINGERPRINTER,
                                quickbuild: bool = True, use_p_cut: bool = False, cut_off: float = 0.5,
-                               evaluate_later: bool = True, name: str = None, build_applicability_domain: bool = False,
-                               ad_k: int = 5, ad_local_compatibility_threshold: float = 0.5,
-                               ad_reliability_threshold: float = 0.5) -> 'RelativeReasoning':
+                               evaluate_later: bool = True, name: str = None) -> 'RelativeReasoning':
         return RelativeReasoning.create(self, packages, classifer_type, eval_type, association_type,
                                         evaluation_packages=evaluation_packages, fingerprinter_type=fingerprinter_type,
                                         quickbuild=quickbuild, use_p_cut=use_p_cut, cut_off=cut_off,
-                                        evaluate_later=evaluate_later, name=name,
-                                        build_applicability_domain=build_applicability_domain,
-                                        ad_k=ad_k, ad_local_compatibilty_threshold=ad_local_compatibility_threshold,
-                                        ad_reliability_threshold=ad_reliability_threshold)
+                                        evaluate_later=evaluate_later, name=name)
 
     def get_relative_reasonings(self) -> List['RelativeReasoning']:
         """
@@ -691,9 +686,7 @@ class RelativeReasoning(ReviewableEnviPathObject):
                evaluation_packages: List[Package] = None,
                fingerprinter_type: FingerprinterType = FingerprinterType.ENVIPATH_FINGERPRINTER,
                quickbuild: bool = True, use_p_cut: bool = False, cut_off: float = 0.5,
-               evaluate_later: bool = True, name: str = None, build_applicability_domain: bool = False,
-               ad_k: int = 5, ad_local_compatibilty_threshold: float = 0.5,
-               ad_reliability_threshold: float = 0.5) -> 'RelativeReasoning':
+               evaluate_later: bool = True, name: str = None) -> 'RelativeReasoning':
 
         payload = {
             'fpType': fingerprinter_type.value,
@@ -715,25 +708,10 @@ class RelativeReasoning(ReviewableEnviPathObject):
         if name:
             payload['modelName'] = name
 
-        if build_applicability_domain:
-            payload['buildAD'] = 'on'
-            payload['adK'] = ad_k
-            payload['localCompatibilityThreshold'] = ad_local_compatibilty_threshold
-            payload['reliabilityThreshold'] = ad_reliability_threshold
-
         url = '{}/{}'.format(package.get_id(), Endpoint.RELATIVEREASONING.value)
         res = package.requester.post_request(url, payload=payload, allow_redirects=False)
         res.raise_for_status()
         return RelativeReasoning(package.requester, id=res.headers['Location'])
-
-    def get_applicability_domain(self) -> Optional['ApplicabilityDomain']:
-
-        try:
-            ad_data = self._get('appdomain')
-            return ApplicabilityDomain(self.requester, id=ad_data['id'])
-        except ValueError:
-            # This object has no ApplicabilityDomain attached...
-            return None
 
     def download_arff(self) -> str:
         params = {
@@ -753,35 +731,6 @@ class RelativeReasoning(ReviewableEnviPathObject):
     def classify_smiles(self, smiles: str):
         # TODO
         raise NotImplementedError("Not (yet) implemented!")
-
-
-class ApplicabilityDomain(ReviewableEnviPathObject):
-
-    @staticmethod
-    def create(relative_reasoning: RelativeReasoning, ad_k: int = 5,
-               ad_local_compatibilty_threshold: float = 0.5, ad_reliability_threshold: float = 0.5):
-        payload = {
-            'adK': ad_k,
-            'localCompatibilityThreshold': ad_local_compatibilty_threshold,
-            'reliabilityThreshold': ad_reliability_threshold,
-        }
-
-        url = '{}/{}'.format(relative_reasoning.get_id(), Endpoint.APPLICABILITYDOMAIN.value)
-        res = relative_reasoning.requester.post_request(url, payload=payload, allow_redirects=False)
-        res.raise_for_status()
-        return ApplicabilityDomain(relative_reasoning.requester, id=res.headers['Location'])
-
-    def get_ad_stats_for_compounds_structure(self,
-                                             compounds_structure: CompoundStructure) -> 'ApplicabilityDomainResult':
-        return self.get_ad_stats_for_smiles(compounds_structure.get_smiles())
-
-    def get_ad_stats_for_smiles(self, smiles: str) -> 'ApplicabilityDomainResult':
-        payload = {
-            'smiles': smiles
-        }
-        res = self.requester.post_request(self.id, payload=payload).json()
-        return res
-        # return ApplicabilityDomainResult()
 
 
 class Node(ReviewableEnviPathObject):
@@ -818,9 +767,6 @@ class Node(ReviewableEnviPathObject):
 
     def create(self, **kwargs):
         pass
-
-    def get_add_assessment(self) -> Optional['ADAssessment']:
-        return self.requester.get_json(self.id + '?adassessment=true')
 
 
 class Edge(ReviewableEnviPathObject):
@@ -964,6 +910,7 @@ class NormalizationRule(ReviewableEnviPathObject):
             payload['ruleDesc'] = description
 
         setting.requester.post_request(setting.id, payload=payload)
+
     # TODO
     # {
     #   "aliases" : [ ] ,
@@ -1008,6 +955,9 @@ class Pathway(ReviewableEnviPathObject):
     def is_completed(self) -> bool:
         return "true" == self._get('completed')
 
+    def has_failed(self) -> bool:
+        return "error" == self._get('completed')
+
     @staticmethod
     def create(package: Package, smiles: str, name: str = None, description: str = None,
                root_node_only: bool = False, setting: Setting = None):
@@ -1015,7 +965,7 @@ class Pathway(ReviewableEnviPathObject):
             'smilesinput': smiles
         }
 
-        # TODO the API allows creation of Setting on the fly. Should we support that here
+        # TODO the API allows creation of Setting on the fly. Should we support that here?
 
         if name:
             payload['name'] = name
@@ -1105,77 +1055,6 @@ class Group(enviPathObject):
 
 HalfLife = namedtuple('HalfLife', 'scenarioName, scenarioId, hl, hl_comment, hl_fit, hl_model, source')
 ModelStatus = namedtuple('ModelStatus', 'progress, status, statusMessage')
-
-
-class ApplicabilityDomainResult(object):
-    #  TODO
-    # x = {
-    #     'adAssessment': {
-    #         'compoundStructure': {
-    #             'id': 'http://localhost:8080/package/fa4f9bfc-8009-4d2e-afbd-98469badc31a/compound/bf36cf1f-8f16-44fc-bb2d-d288ee1604c2/structure/84cb3038-7b0f-45e3-8f21-1abdf7dce562',
-    #             'identifier': 'structure',
-    #             'name': 'structure 0000063',
-    #             'reviewStatus': 'unreviewed'
-    #         },
-    #         'image': 'http://localhost:8080/package/fa4f9bfc-8009-4d2e-afbd-98469badc31a/pathway/a5c52b41-3d93-4eec-a670-411575fa42a1/node/fe2d1370-1cca-4cf5-8be2-5bd7ac5d9996?image=svg&highlight=true',
-    #         'inAD': True,
-    #         'localCompatibilityThreshold': '0.2',
-    #         'reactivityimage': 'http://localhost:8080/package/fa4f9bfc-8009-4d2e-afbd-98469badc31a/pathway/a5c52b41-3d93-4eec-a670-411575fa42a1/node/fe2d1370-1cca-4cf5-8be2-5bd7ac5d9996?image=svg&highlightReactivity=true',
-    #         'reliabilityThreshold': '0.2'
-    #     },
-    #     'transformations': [{
-    #         'isPredicted': True,
-    #         'localCompatibility': '0.8',
-    #         'neighbours': [{
-    #             'experimentalPathways': [{
-    #                 'id': 'http://localhost:8080/package/32de3cf4-e3e6-4168-956e-32fa5ddb0ce1/pathway/92f0b5f7-ea5f-4e00-adfa-182d86cab2f3',
-    #                 'identifier': 'pathway',
-    #                 'name': '2,4-Dichlorophenoxyacetic Acid',
-    #                 'reviewStatus': 'reviewed'
-    #             }],
-    #             'observed': True,
-    #             'probability': '0.7',
-    #             'structure': {
-    #                 'id': 'http://localhost:8080/package/32de3cf4-e3e6-4168-956e-32fa5ddb0ce1/compound/ab28b9fe-e761-4728-ade7-6435cce93e9e/structure/e534956f-eac4-491c-8f73-08a46b7a1fda',
-    #                 'identifier': 'structure',
-    #                 'name': '4-Chlorophenol',
-    #                 'reviewStatus': 'reviewed'},
-    #             'triggered': True
-    #         }, {
-    #             'experimentalPathways': [],
-    #             'observed': False,
-    #             'probability': '0.1',
-    #             'structure': {
-    #                 'id': 'http://localhost:8080/package/32de3cf4-e3e6-4168-956e-32fa5ddb0ce1/compound/1b891fe0-560e-430a-b340-094a272bfbe7/structure/79f09572-58dc-4275-93b9-061c8c252228',
-    #                 'identifier': 'structure',
-    #                 'name': '5-Sulfosalicylate',
-    #                 'reviewStatus': 'reviewed'},
-    #             'triggered': True
-    #         }],
-    #         'predictedEdge': {
-    #             'bayesprobability': '0.2',
-    #             'id': 'http://localhost:8080/package/fa4f9bfc-8009-4d2e-afbd-98469badc31a/pathway/a5c52b41-3d93-4eec-a670-411575fa42a1/edge/42095393-45fd-431e-8b58-0f9408d9fee7',
-    #             'identifier': 'edge',
-    #             'image': 'http://localhost:8080/package/fa4f9bfc-8009-4d2e-afbd-98469badc31a/reaction/b31b33a6-29c5-462c-bedd-369af45f653b?image=svg&highlight=true',
-    #             'name': 'edge 0000002',
-    #             'probability': '0.2',
-    #             'reviewStatus': 'unreviewed'},
-    #         'probability': 'null',
-    #         'reliability': '0.2125922590494156',
-    #         'rule': {
-    #             'id': 'http://localhost:8080/package/32de3cf4-e3e6-4168-956e-32fa5ddb0ce1/parallel-rule/d06a4cce-fc80-4d05-92df-cbd0df7b1cb8',
-    #             'identifier': 'parallel-rule',
-    #             'name': 'bt0014',
-    #             'reviewStatus': 'reviewed'
-    #         }
-    #     }]
-    # }
-    def __init__(self, in_ad: bool):
-        self.in_ad = in_ad
-
-
-class ADAssessment(object):
-    pass
 
 
 class ECNumber(object):

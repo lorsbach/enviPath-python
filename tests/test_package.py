@@ -39,9 +39,6 @@ class TestPackage:
     def anonymous_default_group(self, anonymous_user):
         return anonymous_user.get_groups()[0]
 
-    def test_anonymous_user(self, anonymous_user):
-        assert anonymous_user.get_name() == 'anonymous'
-
     def test_create_package(self, eP, anonymous_user, anonymous_default_group):
         p = Package.create(eP, anonymous_default_group, name="Test Suite Package",
                            description="Test Suite Package Description")
