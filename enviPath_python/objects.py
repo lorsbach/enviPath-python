@@ -729,8 +729,11 @@ class RelativeReasoning(ReviewableEnviPathObject):
         return self.classify_smiles(structure.get_smiles())
 
     def classify_smiles(self, smiles: str):
-        # TODO
-        raise NotImplementedError("Not (yet) implemented!")
+        params = {
+            'smiles': smiles,
+            'classify': 'ILikeCats'
+        }
+        return self.requester.get_request(self.id, params=params).json()
 
 
 class Node(ReviewableEnviPathObject):
