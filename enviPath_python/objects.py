@@ -256,11 +256,16 @@ class Package(enviPathObject):
                                evaluation_packages: List['Package'] = None,
                                fingerprinter_type: FingerprinterType = FingerprinterType.ENVIPATH_FINGERPRINTER,
                                quickbuild: bool = True, use_p_cut: bool = False, cut_off: float = 0.5,
-                               evaluate_later: bool = True, name: str = None) -> 'RelativeReasoning':
+                               evaluate_later: bool = True, name: str = None, build_applicability_domain: bool = False,
+                               ad_k: int = 5, ad_local_compatibility_threshold: float = 0.5,
+                               ad_reliability_threshold: float = 0.5) -> 'RelativeReasoning':
         return RelativeReasoning.create(self, packages, classifer_type, eval_type, association_type,
                                         evaluation_packages=evaluation_packages, fingerprinter_type=fingerprinter_type,
                                         quickbuild=quickbuild, use_p_cut=use_p_cut, cut_off=cut_off,
-                                        evaluate_later=evaluate_later, name=name)
+                                        evaluate_later=evaluate_later, name=name,
+                                        build_applicability_domain=build_applicability_domain,
+                                        ad_k=ad_k, ad_local_compatibility_threshold=ad_local_compatibility_threshold,
+                                        ad_reliability_threshold=ad_reliability_threshold)
 
     def get_relative_reasonings(self) -> List['RelativeReasoning']:
         """
@@ -376,6 +381,15 @@ class Compound(ReviewableEnviPathObject):
 
 class CompoundStructure(ReviewableEnviPathObject):
 
+    def add_alias(self, alias):
+        payload = {
+            'name': alias,
+        }
+        self.requester.post_request(self.id, payload=payload, allow_redirects=False)
+        self.loaded = False
+        if hasattr(self, 'alias'):
+            delattr(self, 'alias')
+
     def get_charge(self) -> float:
         return float(self._get('charge'))
 
@@ -427,7 +441,7 @@ class CompoundStructure(ReviewableEnviPathObject):
         if mol_file:
             structure_payload['molfile'] = mol_file
 
-        url = '{}/{}'.format(parent.get_id(), Endpoint.COMPOUNDSTRUCTURE)
+        url = '{}/{}'.format(parent.get_id(), Endpoint.COMPOUNDSTRUCTURE.value)
         res = parent.requester.post_request(url, payload=structure_payload, allow_redirects=False)
         res.raise_for_status()
         return CompoundStructure(parent.requester, id=res.headers['Location'])
@@ -686,7 +700,9 @@ class RelativeReasoning(ReviewableEnviPathObject):
                evaluation_packages: List[Package] = None,
                fingerprinter_type: FingerprinterType = FingerprinterType.ENVIPATH_FINGERPRINTER,
                quickbuild: bool = True, use_p_cut: bool = False, cut_off: float = 0.5,
-               evaluate_later: bool = True, name: str = None) -> 'RelativeReasoning':
+               evaluate_later: bool = True, name: str = None, build_applicability_domain: bool = False,
+               ad_k: int = 5, ad_local_compatibility_threshold: float = 0.5,
+               ad_reliability_threshold: float = 0.5) -> 'RelativeReasoning':
 
         payload = {
             'fpType': fingerprinter_type.value,
@@ -707,6 +723,12 @@ class RelativeReasoning(ReviewableEnviPathObject):
 
         if name:
             payload['modelName'] = name
+
+        if build_applicability_domain:
+            payload['buildAD'] = 'on'
+            payload['adK'] = ad_k
+            payload['localCompatibilityThreshold'] = ad_local_compatibility_threshold
+            payload['reliabilityThreshold'] = ad_reliability_threshold
 
         url = '{}/{}'.format(package.get_id(), Endpoint.RELATIVEREASONING.value)
         res = package.requester.post_request(url, payload=payload, allow_redirects=False)
@@ -734,6 +756,42 @@ class RelativeReasoning(ReviewableEnviPathObject):
             'classify': 'ILikeCats'
         }
         return self.requester.get_request(self.id, params=params).json()
+
+    def get_applicability_domain(self) -> Optional['ApplicabilityDomain']:
+        try:
+            ad_data = self._get('appdomain')
+            return ApplicabilityDomain(self.requester, id=ad_data['id'])
+        except ValueError:
+            # This object has no ApplicabilityDomain attached...
+            return None
+
+
+class ApplicabilityDomain(ReviewableEnviPathObject):
+
+    @staticmethod
+    def create(relative_reasoning: RelativeReasoning, ad_k: int = 5,
+               ad_local_compatibilty_threshold: float = 0.5, ad_reliability_threshold: float = 0.5):
+        payload = {
+            'adK': ad_k,
+            'localCompatibilityThreshold': ad_local_compatibilty_threshold,
+            'reliabilityThreshold': ad_reliability_threshold,
+        }
+
+        url = '{}/{}'.format(relative_reasoning.get_id(), Endpoint.APPLICABILITYDOMAIN.value)
+        res = relative_reasoning.requester.post_request(url, payload=payload, allow_redirects=False)
+        res.raise_for_status()
+        return ApplicabilityDomain(relative_reasoning.requester, id=res.headers['Location'])
+
+    def get_ad_stats_for_compounds_structure(self,
+                                             compounds_structure: CompoundStructure) -> 'ApplicabilityDomainResult':
+        return self.get_ad_stats_for_smiles(compounds_structure.get_smiles())
+
+    def get_ad_stats_for_smiles(self, smiles: str) -> 'ApplicabilityDomainResult':
+        payload = {
+            'smiles': smiles
+        }
+        res = self.requester.post_request(self.id, payload=payload).json()
+        return res
 
 
 class Node(ReviewableEnviPathObject):
@@ -767,6 +825,9 @@ class Node(ReviewableEnviPathObject):
 
     def get_depth(self) -> int:
         return self._get('depth')
+
+    def get_ad_assessment(self) -> Optional['ADAssessment']:
+        return self.requester.get_json(self.id + '?adassessment=true')
 
     def create(self, **kwargs):
         pass
@@ -960,6 +1021,30 @@ class Pathway(ReviewableEnviPathObject):
 
     def has_failed(self) -> bool:
         return "error" == self._get('completed')
+
+    def add_node(self, smiles, node_name: str = None, node_depth: int = None, reason: str = None):
+        headers = {
+            'referer': self.id
+        }
+
+        payload = {
+            'nodeAsSmiles': smiles,
+        }
+
+        if node_name is not None:
+            payload['nodeName'] = node_name
+
+        if reason is not None:
+            payload['nodeReason'] = reason
+
+        if node_depth is not None:
+            payload['node_depth'] = node_depth
+
+        url = '{}/{}'.format(self.id, Endpoint.NODE.value)
+        self.requester.post_request(url, headers=headers, payload=payload, allow_redirects=False)
+        self.loaded = False
+        if hasattr(self, 'nodes'):
+            delattr(self, 'nodes')
 
     @staticmethod
     def create(package: Package, smiles: str, name: str = None, description: str = None,

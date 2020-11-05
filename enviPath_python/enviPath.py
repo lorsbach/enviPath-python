@@ -13,6 +13,7 @@
 # THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
 # CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
+import copy
 
 from requests import Session
 from requests.adapters import HTTPAdapter
@@ -253,7 +254,13 @@ class enviPathRequester(object):
         :param payload: data to send.
         :return: response object.
         """
-        response = self.session.request(method, url, params=params, data=payload, headers=self.header, **kwargs)
+        default_headers = self.header
+        if 'headers' in kwargs:
+            default_headers = copy.deepcopy(default_headers)
+            default_headers.update(**kwargs['headers'])
+            del kwargs['headers']
+
+        response = self.session.request(method, url, params=params, data=payload, headers=default_headers, **kwargs)
         response.raise_for_status()
         return response
 
