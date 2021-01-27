@@ -155,7 +155,7 @@ class ReviewableEnviPathObject(enviPathObject, ABC):
             res.append(Scenario(self.requester, **plain_scenario))
         return res
 
-
+# TODO change to reviewable
 class Package(enviPathObject):
 
     def set_description(self, desc: str) -> None:
@@ -297,19 +297,21 @@ class Package(enviPathObject):
         return json.loads(buffer.read().decode())
 
     def set_access_for_user(self, obj: Union['Group', 'User'], perm: Permission) -> None:
+        # Due to multipart/form-data add tuples as payload
         payload = {
-            'permissions': 'change',
-            'ppsURI': obj.get_id(),
+            'permissions': (None, 'change'),
+            'ppsURI': (None, obj.get_id()),
         }
 
         if perm == Permission.READ:
-            payload['read'] = 'on'
+            payload['read'] = (None, 'on')
 
         if perm == Permission.WRITE:
-            payload['write'] = 'on'
+            payload['write'] = (None, 'on')
 
-        self.requester.post_request(self.id, payload=payload, allow_redirects=False)
+        self.requester.post_request(self.id, files=payload, allow_redirects=False)
 
+    # TODO typing for ep or being consisten with eP.requester...
     @staticmethod
     def create(ep, group: 'Group', name: str = None, description: str = None) -> 'Package':
         # TODO add type hint for ep and get rid of cyclic import
