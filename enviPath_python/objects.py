@@ -137,6 +137,11 @@ class enviPathObject(ABC):
             self.__delattr__(key)
 
 
+    def refresh(self):
+        # TODO clear internal cache and fetch json again
+        pass
+
+
 class ReviewableEnviPathObject(enviPathObject, ABC):
 
     def get_aliases(self) -> List[str]:
@@ -328,11 +333,28 @@ class Package(enviPathObject):
         return Package(ep.requester, id=res.headers['Location'])
 
 
-class Scenario(enviPathObject):
-
-    @staticmethod
-    def create(**kwargs):
-        pass
+# class Scenario(enviPathObject):
+#
+#     @staticmethod
+#     def create(package: Package, name: str, description: str):
+#         scenario_payload = {}
+#
+#         scenario_payload['studyName'] = name
+#         # TODO add payload
+#         # https://git.envipath.com/enviPath/enviPath/src/branch/develop/PPS-api-impl/src/main/java/org/kramerlab/pps/api/impl/services/servlets/ScenarioServlet.java#L94
+#
+#         url = '{}{}'.format(package.get_base_url(), Endpoint.SCENARIO.value)
+#         res = package.requester.post_request(url, payload=scenario_payload, allow_redirects=False)
+#         res.raise_for_status()
+#         return Scenario(package.requester, id=res.headers['Location'])
+#
+#     def add_additional_information(self):
+#         AdditionalInformation.create(self)
+#
+#
+# class AdditionalInformation():
+#
+#     pass
 
 
 class Compound(ReviewableEnviPathObject):
